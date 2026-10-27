@@ -272,10 +272,10 @@ select{width:100%;padding:11px 12px;background:var(--card);border:1px solid var(
   <div class="card">
     <div class="ch"><div class="ct">16-week block map</div></div>
     <div style="padding:12px 14px;display:flex;flex-direction:column;gap:9px">
-      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:var(--blu);flex-shrink:0"></div><div style="font-size:12px"><b>Wks 1–4:</b> Block 1 — Build (wk 4 deload)</div></div>
-      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:var(--pur);flex-shrink:0"></div><div style="font-size:12px"><b>Wks 5–8:</b> Block 2 — Intensify (wk 8 deload)</div></div>
-      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:#e06050;flex-shrink:0"></div><div style="font-size:12px"><b>Wks 9–12:</b> Block 3 — Tempo + aerobic bodybuilder (wk 12 deload)</div></div>
-      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:var(--grn);flex-shrink:0"></div><div style="font-size:12px"><b>Wks 13–16:</b> Block 4 — Peak (wk 16 retest)</div></div>
+      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:var(--blu);flex-shrink:0"></div><div style="font-size:12px"><b>Wks 1–4:</b> Block 1 (wk 4 deload)</div></div>
+      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:var(--pur);flex-shrink:0"></div><div style="font-size:12px"><b>Wks 5–8:</b> Block 2 (wk 8 deload)</div></div>
+      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:#e06050;flex-shrink:0"></div><div style="font-size:12px"><b>Wks 9–12:</b> Block 3 (wk 12 deload)</div></div>
+      <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:3px;background:var(--grn);flex-shrink:0"></div><div style="font-size:12px"><b>Wks 13–16:</b> Block 4 (wk 16 retest)</div></div>
     </div>
   </div>
 </div>
@@ -406,7 +406,7 @@ select{width:100%;padding:11px 12px;background:var(--card);border:1px solid var(
 
 <div class="mo" id="altMo"><div class="ms">
   <div class="mhb"></div>
-  <div class="mhd"><div class="mt">🔥 Alternate Saturday finishers</div><div class="msl">Swap the standard finisher rows for variety. Use occasionally, not every week.</div></div>
+  <div class="mhd"><div class="mt">🔥 Alternate Saturday finishers</div><div class="msl">Swap the athletic complex for variety. Use occasionally, not every week.</div></div>
   <div class="mb" id="altFinisherList"></div>
 </div></div>
 
@@ -419,10 +419,12 @@ const MOS=['January','February','March','April','May','June','July','August','Se
 const MONS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const STORE_KEY='ghpv4'; // key kept from v4 so logged history carries over
 const REST_CAP=120;      // no rest timer longer than 2 minutes
-const BRPE={1:7,2:8,3:8,4:9}; // target RPE ceiling per block, used by the progression rule
-const BLKN={1:'Block 1 — Build',2:'Block 2 — Intensify',3:'Block 3 — Tempo + Aerobic BB',4:'Block 4 — Peak'};
-function isDL(w){return w%4===0&&w<16;}
-const BLKS=[''].concat(Array.from({length:16},function(_,i){var w=i+1,b=Math.ceil(w/4);return w===16?'Week 16 — RETEST':(isDL(w)?'Block '+b+' — DELOAD':BLKN[b]);}));
+const ALIAS={'Barbell Squat (G6)':'Barbell Back Squat (G6)','DB Lateral Raise (Bowflex)':'Seated DB Lateral Raise','Cable Tricep Pushdown (G6)':'Straight-Bar Triceps Pushdown (G6)','Cable Face Pull with Rope (G6)':'Cable Face Pull with Rope (G6)'};
+function canon(n){return ALIAS[n]||n;}
+const BLKN={1:'Block 1',2:'Block 2',3:'Block 3',4:'Block 4'};
+const WIN=['Baseline','Build','Peak','Deload'];
+function isDL(w){return w%4===0&&w<16;}   // logs from deload weeks are flagged and ignored for progression
+const BLKS=[''].concat(Array.from({length:16},function(_,i){var w=i+1,b=Math.ceil(w/4);return w===16?'Week 16 · Retest':'Block '+b+' · '+WIN[(w-1)%4];}));
 
 /* ---------- date helpers (local time, never UTC) ---------- */
 function p2(n){return String(n).padStart(2,'0');}
@@ -433,223 +435,209 @@ function dayDiff(a,b){return Math.round((pd(a)-pd(b))/864e5);}
 function wkOf(ds){var st=S.profile&&S.profile.startDate;if(!st)return 0;var d=dayDiff(ds,st);if(d<0)return 0;var w=Math.floor(d/7)+1;return w>16?0:w;}
 function curWk(){var st=S.profile&&S.profile.startDate;if(!st)return 1;var d=dayDiff(lds(),st);return Math.min(16,Math.max(1,Math.floor(d/7)+1));}
 
-/* ---------- plan data (v2: 16 weeks, 5 training days, RPE based) ---------- */
+/* ---------- plan data (v5: 16 weeks, 6 training days, giant sets, RPE based) ---------- */
 function X(n,t,s,rx,rest,o){return Object.assign({n:n,t:t,s:s,rx:rx,rest:rest},o||{});}
-// BX builds one exercise for any block from a 4-entry table: [sets, text, extras]
-function BX(n,t,tb,o){
-  return function(b){
-    var e=tb[b-1];
-    var base={n:n,t:t,s:e[0],rx:e[1],rest:75};
-    return Object.assign(base,o||{},e[2]||{});
-  };
+var BB={bb:1,inc:5};
+function wiOf(w){return ((w-1)%4)+1;}           // week inside the 4-week block (4 = deload)
+function rounds(wi){return wi===1?2:3;}         // giant set rounds: 2 in week 1, 3 after
+function warm(extra,tmin){
+  return X('Warm-Up ('+(tmin||'6-7')+' min)','Activation',1,
+   'Jump rope 60 sec, band pull-aparts 15, bodyweight squats 10, dead hang 20 sec, shoulder CARs 5 each way, 90/90 hip switch 45 sec, quadruped thoracic rotation 6/side.'+(extra?' '+extra:''),0,{tm:1});
 }
-var BB={bb:1,inc:5},DBI={inc:2.5},CBI={inc:5};
+// top-set lift: top set plus two back-offs at about 92% of the top weight
+function topLift(n,reps,bo,note,o){
+  return X(n,'Strength',3,'Top set of '+reps+' @ RPE 8, then 2 x '+bo+' at about 92% of the top weight. '+note,120,
+    Object.assign({top:1,lo:reps,ramp:1,rt:8},BB,o||{}));
+}
+// accessory that progresses by reps then load
+function acc(n,t,s,rx,rest,hi,inc,o){return X(n,t,s,rx,rest,Object.assign({hi:hi,inc:inc,rt:10},o||{}));}
+// giant set member: same rounds for all members, rest only after the last one
+function gs(g,label,list,rn){
+  return list.map(function(m,i){
+    var last=i===list.length-1;
+    return Object.assign({},m,{s:rn,g:g,src:label,rest:last?60:0});
+  });
+}
 
-var MON_L=[
-BX('Box Jump (Plyobox)','Power',[
- [4,'5 reps. Step down every rep, full reset before the next jump.'],
- [4,'5 reps. Raise the box one notch this block. Step down, full reset.'],
- [4,'5 reps. Same box height as block 2.'],
- [4,'5 reps. Raise the box one notch again. Step down, full reset.']],{rest:90}),
-BX('Barbell Squat (G6)','Strength',[
- [4,'8 reps @ RPE 7. Back or front squat, stay with one for the whole block. Set the safeties.',{hi:8}],
- [4,'6-8 reps @ RPE 8.',{hi:8}],
- [4,'8-10 reps, 3 sec lowering @ RPE 8.',{hi:10}],
- [3,'Top set of 6 @ RPE 8-9, then 2 x 8 at about 90% of it.',{top:1,lo:6,bo:8}]],Object.assign({ramp:1,rest:120},BB)),
-BX('Barbell Flat Bench Press (G6)','Strength',[
- [4,'8 reps @ RPE 7. Alternate with the row, rest after each pair.',{hi:8}],
- [4,'6-8 reps @ RPE 8.',{hi:8}],
- [4,'8-10 reps, 3 sec lowering @ RPE 8.',{hi:10}],
- [3,'Top set of 6-8 @ RPE 8-9, then 2 x 8 at about 90% of it.',{top:1,lo:6,bo:8}]],Object.assign({pr:'A',src:'SUPERSET A1',rest:90},BB)),
-BX('Barbell Bent-Over Row (G6)','Strength',[
- [4,'8-10 reps. Flat back, pull to the lower ribs.',{hi:10}],
- [4,'6-8 reps.',{hi:8}],
- [4,'10 reps, normal tempo.',{hi:10}],
- [3,'One top set of 8, then 2 x 10 lighter.',{top:1,lo:8,bo:10}]],Object.assign({pr:'B',src:'SUPERSET A2',rest:90},BB)),
-BX('Landmine Half-Kneeling Press','Strength',[
- [2,'10/side. Press along the arc, ribs down.',{hi:10}],
- [3,'8/side.',{hi:8}],
- [2,'10/side, 3 sec lowering.',{hi:10}],
- [3,'6-8/side, heavier.',{hi:8}]],{inc:5,rest:75}),
-BX('Cable Pallof Press (G6)','Core',[
- [3,'10/side.',{hi:10}],[3,'8/side.',{hi:8}],[3,'12/side.',{hi:12}],[3,'10/side.',{hi:10}]],{inc:5,pr:'A',src:'SUPERSET',rest:45}),
-BX('Standing Calf Raise (G6 or DBs)','Hypertrophy',[
- [3,'12-15 reps. Full stretch at the bottom.',{hi:15}],[3,'12-15 reps.',{hi:15}],[3,'15 reps.',{hi:15}],[3,'12-15 reps.',{hi:15}]],{inc:5,pr:'B',rest:60})
-];
+function emom(d,b,wi){
+  var add=2*(b-1);
+  if(d==='MON'){
+    if(wi===1)return X('EMOM Finisher — 8 min','Conditioning',4,'2-minute cycle x 4. Min 1: '+(10+add)+' push-ups. Min 2: '+(15+add)+' band pull-aparts. Tap a set after each cycle.',0,{tm:1,cyc:2});
+    if(wi===2)return X('EMOM Finisher — 10 min','Conditioning',5,'2-minute cycle x 5. Min 1: '+(12+add)+' push-ups. Min 2: '+(18+add)+' band pull-aparts.',0,{tm:1,cyc:2});
+    return X('EMOM Finisher — 12 min','Conditioning',4,'3-minute rotation x 4. Min 1: '+(10+add)+' push-ups. Min 2: '+(15+add)+' band pull-aparts. Min 3: 12 mountain climbers per side.',0,{tm:1,cyc:3});
+  }
+  if(wi===1)return X('EMOM Finisher — 8 min','Conditioning',4,'2-minute cycle x 4. Min 1: '+(10+add)+' hanging knee raises. Min 2: '+(15+add)+' band pull-aparts.',0,{tm:1,cyc:2});
+  if(wi===2)return X('EMOM Finisher — 10 min','Conditioning',5,'2-minute cycle x 5. Min 1: '+(12+add)+' hanging knee raises. Min 2: '+(18+add)+' band pull-aparts.',0,{tm:1,cyc:2});
+  return X('EMOM Finisher — 12 min','Conditioning',4,'3-minute rotation x 4. Min 1: '+(10+add)+' hanging knee raises. Min 2: '+(15+add)+' band pull-aparts. Min 3: 12 mountain climbers per side.',0,{tm:1,cyc:3});
+}
 
-function tueDA(b){
-  var h=(b===2||b===4)?' Heavier than block 1.':'';
+function monL(b,wi){
+  var r=rounds(wi);
+  return [warm(),
+   topLift('Barbell Incline Bench Press (G6)',4,'6-8','Main chest lift. Two ramp sets first.'),
+   topLift('Barbell Overhead Press (G6)',4,'6-8','Strict press, no leg drive. One ramp set.'),
+  ].concat(
+   gs('M1','GIANT SET 1',[
+    acc('Cable Chest Fly (G6, low)','Hypertrophy',r,'12-15 reps, 0-1 in reserve. Full stretch every rep.',0,15,5),
+    acc('Seated DB Lateral Raise','Hypertrophy',r,'12-15 reps, 0-1 in reserve. Priority for shoulder width.',0,15,2.5),
+    acc('DB Skull Crusher','Hypertrophy',r,'8-10 reps, 0-1 in reserve. Elbows stationary.',0,10,2.5)],r),
+   gs('M2','GIANT SET 2',[
+    acc('Straight-Bar Triceps Pushdown (G6)','Hypertrophy',2,'8-10 reps, 0-1 in reserve. Full lockout.',0,10,5),
+    acc('Push-Up','Hypertrophy',2,'AMRAP, stop 1 rep short. 3 second lowering.',0,0,0,{bw:1,inc:0,hi:0})],2),
+   [emom('MON',b,wi)]);
+}
+function tueL(b,wi){
+  var r=rounds(wi);
+  return [X('Warm-Up (3 min)','Activation',1,'Easy Peloton or jump rope, band pull-aparts 15, shoulder CARs 5 each way. No barbell today, keep the form strict.',0,{tm:1})].concat(
+   gs('T1','GIANT SET 1',[
+    acc('Cable Lateral Raise (G6, low)','Hypertrophy',r,'12-15 reps, 0-1 in reserve. Constant tension, no swing.',0,15,2.5),
+    acc('DB Incline Curl','Hypertrophy',r,'8-10 reps, 0-1 in reserve. Arms hanging back, full stretch.',0,10,2.5),
+    acc('Overhead Cable Triceps Extension (G6)','Hypertrophy',r,'10-12 reps, 0-1 in reserve. Long head emphasis.',0,12,5)],r),
+   gs('T2','GIANT SET 2',[
+    acc('Cable Rear Delt Fly (G6)','Hypertrophy',r,'15 reps, 0-1 in reserve. Lead with the elbows.',0,15,2.5),
+    acc('Cable Curl (G6, low)','Hypertrophy',r,'10-12 reps, 0-1 in reserve. Elbows pinned.',0,12,5),
+    acc('Single-Arm Cable Pushdown (G6)','Hypertrophy',r,'12-15 reps per arm, 0-1 in reserve. Full lockout.',0,15,2.5)],r),
+   [acc('Standing Calf Raise (G6 or DBs)','Hypertrophy',3,'15-20 reps, 0-1 in reserve. Full stretch at the bottom, 1 second pause.',45,20,5),
+    X('Hanging Knee Raise','Core',3,'12-15 reps. Posterior pelvic tilt at the top.',45,{bw:1}),
+    acc('Dead Bug with Cable Tension (G6)','Core',3,'10/side. Anti-rotation under load.',30,10,5),
+    acc('Tall-Kneeling Pallof Press (G6)','Core',3,'10/side. Forces glute and core stability.',30,10,5),
+    X('Peloton Intervals — '+(5+wi)+' x (1 min hard / 1 min easy)','Conditioning',5+wi,'3 min easy spin first. Hard minute at RPE 8-9 (resistance up, cadence 90+), easy minute at light resistance. Tap a set after each hard minute. 3 min easy spin to finish. Add 1 round each week (6, 7, then 8).',0,{tm:1,ivl:1})]);
+}
+function wedL(b,wi){
+  var r=rounds(wi);
+  return [warm('Single-leg RDL, bodyweight, 5/side.'),
+   X('Barbell Deadlift (G6)','Strength',3,'Top set of 4 @ RPE 8, then 2 x 5 at about 92% of the top weight. Bar on shins, hips set. Three ramp sets first.',120,
+     Object.assign({top:1,lo:4,ramp:1,rt:8},BB)),
+   X('Pull-Up or Lat Pulldown (G6)','Strength',3,'Top set of 4-6 @ RPE 8, then 2 x 6-8 at RPE 8. Add weight when bodyweight is easy.',120,{bw:1})
+  ].concat(
+   gs('W1','GIANT SET 1',[
+    acc('Seated Cable Row (G6)','Hypertrophy',r,'10-12 reps, 0-1 in reserve. Row to the lower sternum.',0,12,5),
+    acc('Chest-Supported DB Row','Hypertrophy',r,'10-12 reps, 0-1 in reserve. Takes the low back out after deadlifts.',0,12,2.5),
+    acc('Cable Face Pull with Rope (G6)','Hypertrophy',r,'15-20 reps, 0-1 in reserve. Rear delts and rotator cuff, do not skip.',0,20,5)],r),
+   gs('W2','GIANT SET 2',[
+    acc('Single-Arm Cable Lat Pulldown (G6)','Hypertrophy',2,'10-12 reps per arm, 0-1 in reserve. Full stretch overhead, drive the elbow down.',0,12,5),
+    acc('DB Incline Curl','Hypertrophy',2,'8-10 reps, 0-1 in reserve. Second biceps exposure of the week.',0,10,2.5)],2),
+   [emom('WED',b,wi)]);
+}
+function thuL(b,wi){
   return [
-  X('DB Lateral Raise (Bowflex)','Hypertrophy',4,'15 reps, superset with the face pull, no rest between.'+h,45,{inc:2.5,hi:15,pr:'A',src:'SUPERSET'}),
-  X('Cable Face Pull with Rope (G6)','Hypertrophy',4,'15 reps. External rotation at the end position.',60,{inc:5,hi:15,pr:'B'}),
-  X('DB Curl (Bowflex)','Hypertrophy',3,'12 reps, superset with the pushdown.',45,{inc:2.5,hi:12,pr:'A',src:'SUPERSET'}),
-  X('Cable Tricep Pushdown (G6)','Hypertrophy',3,'12 reps. Full lockout, elbows pinned.',60,{inc:5,hi:12,pr:'B'}),
-  X('Landmine Standing Oblique Twist','Core',3,'10/side. Rotate from the trunk, control the bar.',45,{inc:5,hi:10})];
+   X('Easy Incline Walk — 30 min (treadmill)','Recovery',1,'Incline 4-6%, conversational pace, heart rate under 120 bpm. Do this first, then the mobility work.',0,{tm:1}),
+   X('Hip 90/90 Stretch','Mobility',1,'90 sec per side. Slow and controlled.',0,{tm:1}),
+   X('Thoracic Extension over the G6 Bar','Mobility',1,'90 sec.',0,{tm:1}),
+   X('Pigeon Pose','Mobility',1,'90 sec per side.',0,{tm:1}),
+   X('Dead Hang (G6)','Mobility',3,'30 sec. Shoulder decompression.',60,{tm:1}),
+   acc('Half-Kneeling Single-Arm Cable Press (G6)','Hypertrophy',3,'10/side. Force production from hip stability.',45,10,5),
+   acc('Plank with Cable Row (G6)','Core',3,'8/side, 2 sec hold. Anti-rotation under load.',45,8,5),
+   X('KB Halo','Core',3,'8/side. Light load, shoulder mobility.',45,{tm:1}),
+   X('Front-Rack KB March in Place','Core',3,'30-40 sec. Garage-safe substitute for distance carries.',45,{tm:1}),
+  ];
 }
-var WARM_ROPE=X('Jump Rope Warm-Up','Activation',1,'5 min easy.',0,{tm:1});
-function tueL(b){
-  if(b===1)return [WARM_ROPE].concat(tueDA(1),[X('Treadmill Intervals — 8 x (1 min hard / 1 min easy)','Conditioning',8,'Hard minute at RPE 8, easy minute at a walk. Incline 6% in week 1, add 1% each week. Pick a speed that makes the hard minute RPE 8 and keep it for the block. 3 min walk to finish.',0,{tm:1})]);
-  if(b===2)return [WARM_ROPE].concat(tueDA(2),[X('Treadmill VO2 Intervals — 6 x (90 sec hard / 90 sec easy)','Conditioning',6,'Hard effort at RPE 9, 8-10% incline. Easy periods at a walk. 3 min walk to finish.',0,{tm:1})]);
-  if(b===3)return [WARM_ROPE,
-  X('Landmine Standing Oblique Twist','Core',3,'10/side. Rotate from the trunk, control the bar.',45,{inc:5,hi:10}),
-  X('Aerobic Bodybuilder — 20 min incline walk, stop every 4 min','Cardio',1,'Conversational pace on the treadmill. Walk between stops and resume immediately after each one.',0,{tm:1,src:'AEROBIC BB'}),
-  X('Stop at min 4: Lateral Raise + Face Pull','Hypertrophy',1,'12 lateral raises + 12 face pulls. No rest between.',0,{tm:1,src:'AEROBIC BB'}),
-  X('Stop at min 8: DB Curl + Cable Pushdown','Hypertrophy',1,'12 curls + 12 pushdowns. No rest between.',0,{tm:1,src:'AEROBIC BB'}),
-  X('Stop at min 12: Cable Row + Band Pull-Apart','Hypertrophy',1,'12 cable rows + 20 band pull-aparts.',0,{tm:1,src:'AEROBIC BB'}),
-  X('Stop at min 16: Lateral Raise + Face Pull','Hypertrophy',1,'12 + 12. Then 5 min easy to finish.',0,{tm:1,src:'AEROBIC BB'})];
-  return [WARM_ROPE].concat(tueDA(4),[X('Treadmill Threshold — 3 x (4 min hard / 2 min easy)','Conditioning',3,'Hard effort at RPE 8, 4-6% incline. Easy periods at a walk. 3 min walk to finish.',0,{tm:1})]);
+function friL(b,wi){
+  var r=rounds(wi);
+  return [warm('Add banded terminal knee extensions (20 per leg), banded lateral walk (20 per side) and single-leg RDL (bodyweight, 5/side).'),
+   X('Seated Broad Jump (Plyobox)','Power',3,'3 reps. Primes the nervous system before squats. Full reset each rep.',90,{bw:1}),
+   X('Treadmill Acceleration','Power',3,'8-10 sec max effort. Speed, not conditioning. Full recovery between reps.',90,{tm:1}),
+   X('Barbell Back Squat (G6)','Strength',3,'Top set of 4 @ RPE 8, then 2 x 5-6 at about 92% of the top weight. Depth to parallel minimum. Three ramp sets first.',120,
+     Object.assign({top:1,lo:4,ramp:1,rt:8},BB))
+  ].concat(
+   gs('F1','HIP + HAMSTRING PAIR',[
+    acc('Barbell Hip Thrust (G6)','Hypertrophy',3,'8-10 reps, 0-1 in reserve. Pause 1 second at the top.',0,10,5,{bb:1}),
+    X('Slider Hamstring Curl','Hypertrophy',3,'8-12 reps, 0-1 in reserve. Towels or sliders, hips high.',90,{bw:1})],3).map(function(e){if(e.g)e.rest=e.rest===60?90:0;return e;}),
+   [acc('DB Bulgarian Split Squat','Hypertrophy',3,'8-10 per leg, 0-1 in reserve. Shin vertical, front foot forward.',90,10,2.5)],
+   gs('F2','PUMP FINISHER',[
+    acc('KB Goblet Squat','Conditioning',3,'12 reps, straight through into the lunges.',0,12,0,{inc:0}),
+    X('Reverse Lunge in Place','Conditioning',3,'20 total. Garage-safe, no floor travel. Rest after the round.',90,{bw:1})],3).map(function(e){if(e.n==='Reverse Lunge in Place')e.rest=90;return e;}));
 }
-function wedL(b){
-  return [
-  X('Easy Incline Walk or Peloton Ride','Recovery',1,(b===1?'30':'40')+' min at a conversational pace. Treadmill incline walk or an easy ride. Going to 40 min is for week 5 onward, if you feel good.',0,{tm:1}),
-  X('Hip 90/90 Stretch (optional)','Mobility',1,'90 sec/side.',0,{tm:1}),
-  X('Thoracic Extension over the G6 Bar (optional)','Mobility',1,'90 sec.',0,{tm:1}),
-  X('Pigeon Pose (optional)','Mobility',1,'90 sec/side.',0,{tm:1}),
-  X('Landmine Cossack Hold (optional)','Mobility',1,'60 sec/side at the bottom, bodyweight.',0,{tm:1})];
+function satL(b,wi){
+  return [warm(),
+   X('Barbell Power Clean or DB Hang Clean','Power',3,'5 reps. Explosive pull, catch in a partial squat. Two ramp sets first.',90,Object.assign({inc:5,ramp:1,hi:5,rt:8},BB)),
+   X('Barbell Flat Bench Press (G6)','Strength',3,'6-8 reps @ RPE 8. Secondary chest lift. One ramp set.',120,Object.assign({hi:8,ramp:1,rt:8},BB)),
+   X('Dips (G6 handles)','Strength',3,'8-12 reps, 0-1 in reserve. Hold a DB between the feet once 12 reps is easy.',90,{bw:1}),
+   X('Kettlebell Swing','Strength',3,'15 reps. Hip snap, not a squat. Cut the sets to 2 if your low back is flat.',60,{w0:40}),
+  ].concat(
+   gs('S1','FACE PULL + LATERAL RAISE',[
+    acc('Cable Face Pull with Rope (G6)','Hypertrophy',3,'12 reps. Back to back with the lateral raise.',0,12,5),
+    acc('Seated DB Lateral Raise','Hypertrophy',3,'12 reps.',0,12,2.5)],3).map(function(e){if(e.n==='Seated DB Lateral Raise')e.rest=60;return e;}),
+   [X('DB Farmers Carry (Bowflex)','Hypertrophy',3,'40 steps. Grip, core and traps.',60,{}),
+    acc('Standing Calf Raise (G6 or DBs)','Hypertrophy',3,'15-20 reps, 0-1 in reserve. Second calf session of the week.',45,20,5)],
+   gs('S2','ATHLETIC COMPLEX',[
+    acc('DB Hang Clean','Conditioning',4,'6 reps. No rest between movements. Round 1 should feel like a 6 out of 10.',0,6,2.5,{rt:8}),
+    acc('DB Front Squat','Conditioning',4,'6 reps.',0,6,2.5,{rt:8}),
+    acc('DB Push Press','Conditioning',4,'6 reps. Slight leg drive.',0,6,2.5,{rt:8}),
+    acc('Renegade Row','Conditioning',4,'6 per side. Wide feet, hips square.',0,6,2.5,{rt:8})],4).map(function(e){
+      e.fin=1;if(e.n==='Renegade Row')e.rest=75;return e;}));
 }
-var THU_L=[
-BX('Barbell Romanian Deadlift (G6)','Strength',[
- [4,'8 reps @ RPE 7. Load the hamstrings before the bar moves.',{hi:8}],
- [4,'6-8 reps @ RPE 8.',{hi:8}],
- [4,'10 reps, 3 sec lowering.',{hi:10}],
- [3,'Top set of 6-8 @ RPE 8-9, then 2 x 8.',{top:1,lo:6,bo:8}]],Object.assign({ramp:1,rest:120},BB)),
-BX('Pull-Up or Lat Pulldown (G6)','Strength',[
- [4,'6-8 reps. Full hang to chin over the bar. Superset with the Cossack squat.'],
- [4,'6-8 reps, weighted if you can.'],
- [4,'8-10 reps, 3 sec lowering.'],
- [4,'Top set of 6, then 3 x 6-8.']],{bw:1,pr:'A',src:'SUPERSET A1',rest:90}),
-BX('Landmine Goblet Alternating Cossack Squat','Hypertrophy',[
- [3,'8/side. Done between pull-up sets.',{hi:8}],[3,'8/side, heavier.',{hi:8}],[3,'10/side.',{hi:10}],[3,'8/side.',{hi:8}]],{inc:5,pr:'B',src:'SUPERSET A2',rest:90}),
-BX('Single-Arm Landmine Meadows Row','Hypertrophy',[
- [3,'10/side.',{hi:10}],[4,'8/side.',{hi:8}],[3,'12/side, pause at the top.',{hi:12}],[3,'8/side.',{hi:8}]],{inc:5,rest:75}),
-BX('Cable Rope Half-Kneeling High-to-Low Chop (G6)','Core',[
- [3,'8/side.',{hi:8}],[3,'8/side, add load.',{hi:8}],[3,'10/side.',{hi:10}],[3,'8/side, add load.',{hi:8}]],{inc:5,rest:45}),
-BX('Single-Arm KB Front Rack Carry','Hypertrophy',[
- [3,'20 steps/side. One KB capped at 40 lb: add steps, then slow the walk.'],[3,'20 steps/side, 40 lb.',{w0:40}],[3,'30 steps/side.'],[3,'30 steps/side, 40 lb.',{w0:40}]],{rest:60}),
-BX('Barbell Shrug (G6)','Hypertrophy',[
- [2,'12-15 reps.',{hi:15}],[2,'12-15 reps.',{hi:15}],[2,'15 reps.',{hi:15}],[2,'12-15 reps.',{hi:15}]],Object.assign({rest:60},BB))
-];
-
-var HKR=X('Hanging Knee Raise','Core',2,'Max reps each set.',60,{bw:1});
-function friL(b){
-  var wu=X('Warm-Up: rope or Peloton, then 2 rounds','Activation',2,'5 min on the jump rope or Peloton first. Each round: 5 DB goblet squats + 5 push-ups.',0,{tm:1});
-  var tail='The score is completion. To scale down, shorten the clock or lower the dumbbells. To scale up, add reps to the jump rope minute first. If your low back or grip is flat, cut the swing minute to 10 reps.';
-  if(b===1)return [wu,X('EMOM 24 min — 4-min cycle x 6','Conditioning',6,'Min 1: 60 jump rope turns. Min 2: 5 DB devil press, 35 lb each hand. Min 3: 15 KB swings. Min 4: 8 box jumps. '+tail,0,{tm:1,cyc:4}),HKR];
-  if(b===2)return [wu,X('EMOM 27 min — 3-min cycle x 9','Conditioning',9,'Min 1: 60 jump rope turns. Min 2: 5 DB devil press, 40 lb each hand. Min 3: 10 hanging knee raises. No finisher. '+tail,0,{tm:1,cyc:3})];
-  if(b===3)return [wu,X('EMOM 24 min — 4-min cycle x 6 (EMOM Diary full body)','Conditioning',6,'Min 1: 10 DB box step-overs, 25 lb each hand. Min 2: 12 DB push press. Min 3: 15 KB swings. Min 4: 10 push-ups, then rest. '+tail,0,{tm:1,cyc:4,src:'EMOM DIARY'}),HKR];
-  return [wu,X('Benchmark Ladder 33 / 22 / 11 — for time','Conditioning',3,'Each round: 30 sec hard jump rope, then alternating DB snatches (35-50 lb) and hanging knee raises, same rep count for both. Round 1 = 33 reps each, round 2 = 22, round 3 = 11. Log each finished round, then log the total time below. Run it in week 13 and again in week 16.',0,{tm:1}),
-  X('Ladder Total Time','Conditioning',1,'Total time in minutes (for example 14.5). Compare week 13 with week 16.',0,{tt:1})];
-}
-var SAT_L=[
-BX('Alternating Single-Arm DB Squat Snatch (Bowflex)','Power',[
- [4,'5/side, 35 lb. Fast hips, lock the arm out overhead. Start fresh from the warm-up and keep it crisp.',{w0:35}],
- [4,'5/side, 40 lb.',{w0:40}],[4,'5/side, 45 lb.',{w0:45}],[4,'5/side, 50 lb.',{w0:50}]],{rest:90}),
-BX('Barbell Incline Bench Press (G6)','Strength',[
- [3,'8-10 reps @ RPE 7-8.',{hi:10}],
- [4,'6-8 reps @ RPE 8.',{hi:8}],
- [3,'10-12 reps, 3 sec lowering.',{hi:12}],
- [3,'Top set of 6-8 @ RPE 8-9, then 2 x 8.',{top:1,lo:6,bo:8}]],Object.assign({ramp:1,rest:120},BB)),
-BX('Dips (G6 handles)','Strength',[
- [3,'8-12 reps, bodyweight.'],
- [4,'8 reps. Hold a DB between the feet once you reach 12 clean reps.'],
- [3,'10-12 reps, bodyweight or weighted.'],
- [3,'8 reps, weighted.']],{bw:1,pr:'A',src:'SUPERSET',rest:75}),
-BX('Single-Arm Half-Kneeling Cable Lat Pulldown (G6)','Hypertrophy',[
- [3,'10/side.',{hi:10}],[4,'8/side.',{hi:8}],[3,'12/side.',{hi:12}],[3,'10/side.',{hi:10}]],{inc:5,pr:'B',rest:75}),
-BX('Cable Rope Staggered-Stance Low-to-High Chop (G6)','Core',[
- [3,'8/side.',{hi:8}],[3,'8/side.',{hi:8}],[3,'10/side.',{hi:10}],[3,'8/side.',{hi:8}]],{inc:5,rest:45}),
-BX('Double DB Suitcase Carry (Bowflex)','Hypertrophy',[
- [3,'30 steps.'],[3,'30 steps, heavier.'],[3,'30 steps.'],[3,'30 steps, heaviest.']],{rest:60}),
-BX('FINISHER: DB Goblet Squat (Bowflex)','Conditioning',[
- [3,'10 reps per round, 3 rounds. Full depth.'],[3,'10 reps per round, 3 rounds.'],[3,'10 reps per round, 3 rounds.'],[3,'10 reps per round, 3 rounds.']],{inc:2.5,rest:0,fin:1}),
-BX('FINISHER: Cable Face Pull (G6)','Conditioning',[
- [3,'12 reps per round.'],[3,'12 reps per round.'],[3,'12 reps per round.'],[3,'12 reps per round.']],{inc:5,rest:0,fin:1}),
-BX('FINISHER: Jump Rope','Conditioning',[
- [3,'30 sec per round. Keep moving between rounds.'],[3,'30 sec per round.'],[3,'30 sec per round.'],[3,'30 sec per round.']],{tm:1,rest:60,fin:1})
-];
 
 var META={
- MON:{name:'Monday',focus:'Squat, Bench and Row',time:58},
- TUE:{name:'Tuesday',focus:'Delts, Arms, Trunk + Treadmill',time:48},
- WED:{name:'Wednesday',focus:'Easy Day — 30-40 Min Walk or Ride',time:35},
- THU:{name:'Thursday',focus:'Hinge, Pull and Rotation',time:58},
- FRI:{name:'Friday',focus:'EMOM Metcon',time:42},
- SAT:{name:'Saturday',focus:'Power, Chest Volume + Dips (Mandatory)',time:58}
+ MON:{name:'Monday',focus:'Push',time:57},
+ TUE:{name:'Tuesday',focus:'Arms, Delts, Calves + Core + Intervals',time:56},
+ WED:{name:'Wednesday',focus:'Pull + Deadlift',time:57},
+ THU:{name:'Thursday',focus:'Active Recovery + Incline Walk',time:55},
+ FRI:{name:'Friday',focus:'Lower Body + Speed',time:57},
+ SAT:{name:'Saturday',focus:'Full-Body Power + Complex',time:57}
 };
-var PLAN={};
-(function(){
-  for(var b=1;b<=4;b++){
-    var k='B'+b;PLAN[k]={};
-    PLAN[k].MON=Object.assign({blk:b,exercises:MON_L.map(function(f){return f(b);})},META.MON);
-    PLAN[k].TUE=Object.assign({blk:b,exercises:tueL(b)},META.TUE);
-    PLAN[k].WED=Object.assign({blk:b,exercises:wedL(b)},META.WED);
-    PLAN[k].THU=Object.assign({blk:b,exercises:THU_L.map(function(f){return f(b);})},META.THU);
-    PLAN[k].FRI=Object.assign({blk:b,exercises:friL(b)},META.FRI);
-    PLAN[k].SAT=Object.assign({blk:b,exercises:SAT_L.map(function(f){return f(b);})},META.SAT);
-    PLAN[k].SUN={name:'Sunday',focus:'Full Rest',time:0,blk:b,rest:true,exercises:[]};
-  }
-})();
-// Week 16 is the retest: rep tests at RPE 9, no RPE 10 efforts. Friday runs the ladder again.
+var LIST={MON:monL,TUE:tueL,WED:wedL,THU:thuL,FRI:friL,SAT:satL};
+
+// Week 16 is the retest. Wednesday, Friday and Saturday carry the rep tests at RPE 9, no RPE 10 efforts.
 var RT={
- MON:{name:'Monday',focus:'Retest: Squat and Bench Rep Tests',time:50,blk:4,exercises:[
-  X('Box Jump (Plyobox)','Power',3,'5 reps. Light, step down every rep.',90),
-  X('Barbell Squat (G6)','Strength',1,'REP TEST: 6 reps @ RPE 9. Ramp sets first. Compare with your block 4 top set. No RPE 10 efforts.',120,Object.assign({top:1,lo:6,ramp:1},BB)),
-  X('Barbell Flat Bench Press (G6)','Strength',1,'REP TEST: 8 reps @ RPE 9. Ramp sets first. Compare with your block 4 top set.',120,Object.assign({top:1,lo:8,ramp:1},BB)),
-  X('Barbell Bent-Over Row (G6)','Strength',2,'10 reps, lighter than block 4.',90,Object.assign({hi:10},BB)),
-  X('Landmine Half-Kneeling Press','Strength',2,'8/side.',75,{inc:5,hi:8}),
-  X('Cable Pallof Press (G6)','Core',2,'10/side.',45,{inc:5,hi:10})]},
- THU:{name:'Thursday',focus:'Retest: RDL and Pull-Up Tests',time:50,blk:4,exercises:[
-  X('Barbell Romanian Deadlift (G6)','Strength',1,'REP TEST: 8 reps @ RPE 9. Ramp sets first. Compare with your block 4 top set.',120,Object.assign({top:1,lo:8,ramp:1},BB)),
+ WED:{name:'Wednesday',focus:'Retest: Deadlift + Pull-Up Max',time:45,blk:4,exercises:[
+  warm('Single-leg RDL, bodyweight, 5/side.'),
+  X('Barbell Deadlift (G6)','Strength',1,'REP TEST: 5 reps @ RPE 9. Ramp sets first. Compare with your best set at 5 reps. No RPE 10 efforts.',120,Object.assign({top:1,lo:5,ramp:1,rt:9},BB)),
   X('Pull-Up or Lat Pulldown (G6)','Strength',1,'REP TEST: max strict pull-ups at bodyweight. Log the reps.',120,{bw:1}),
-  X('Single-Arm Landmine Meadows Row','Hypertrophy',2,'8/side.',75,{inc:5,hi:8}),
-  X('Cable Rope Half-Kneeling High-to-Low Chop (G6)','Core',2,'8/side.',45,{inc:5,hi:8}),
-  X('Single-Arm KB Front Rack Carry','Hypertrophy',2,'30 steps/side, 40 lb.',60,{w0:40})]}
+  acc('Seated Cable Row (G6)','Hypertrophy',2,'10-12 reps, easy.',75,12,5),
+  acc('Cable Face Pull with Rope (G6)','Hypertrophy',2,'15-20 reps, easy.',60,20,5)]},
+ FRI:{name:'Friday',focus:'Retest: Squat',time:45,blk:4,exercises:[
+  warm('Add banded terminal knee extensions and lateral walk.'),
+  X('Barbell Back Squat (G6)','Strength',1,'REP TEST: 6 reps @ RPE 9. Ramp sets first. Compare with your best set at 6 reps. No RPE 10 efforts.',120,Object.assign({top:1,lo:6,ramp:1,rt:9},BB)),
+  acc('Barbell Hip Thrust (G6)','Hypertrophy',2,'8-10 reps, easy.',90,10,5,{bb:1}),
+  acc('DB Bulgarian Split Squat','Hypertrophy',2,'8-10 per leg, easy.',90,10,2.5)]},
+ SAT:{name:'Saturday',focus:'Retest: Bench Press',time:45,blk:4,exercises:[
+  warm(),
+  X('Barbell Flat Bench Press (G6)','Strength',1,'REP TEST: 8 reps @ RPE 9. Ramp sets first. Compare with your best set at 8 reps. No RPE 10 efforts.',120,Object.assign({top:1,lo:8,ramp:1,rt:9},BB)),
+  X('Dips (G6 handles)','Strength',2,'8-12 reps, easy.',90,{bw:1}),
+  acc('Standing Calf Raise (G6 or DBs)','Hypertrophy',2,'15-20 reps, easy.',45,20,5)]}
 };
 
 function clone(o){return JSON.parse(JSON.stringify(o));}
 function deloadify(ses,d){
   var s=clone(ses);s.deload=true;s.focus=s.focus+' (Deload)';
-  var ex=s.exercises;
-  if(d==='TUE'){
-    var hasStops=ex.some(function(e){return e.src==='AEROBIC BB';});
-    if(!hasStops){
-      ex=ex.filter(function(e){return !(e.t==='Conditioning'&&e.n.indexOf('Warm-Up')<0);});
-      ex.push(X('Easy Incline Walk — 20 min','Recovery',1,'Deload: keep the delt and arm work above, replace the intervals with a 20 min easy incline walk.',0,{tm:1}));
-    }
-  }
-  if(d==='SAT')ex=ex.filter(function(e){return !e.fin;});
+  var ex=s.exercises.filter(function(e){return !e.cyc&&!e.fin&&!e.ivl;}); // no EMOM, no Saturday complex, no intervals
+  if(d==='TUE')ex.push(X('Easy Peloton Ride — 15 min','Recovery',1,'Deload: replace the intervals with 15 minutes at 55-65% FTP, conversational.',0,{tm:1}));
+  if(d==='SAT')ex.push(X('Easy Walk or Ride — 20 min','Recovery',1,'Deload: replace the complex with 20 minutes at a conversational pace.',0,{tm:1}));
   ex.forEach(function(e){
-    if(d==='FRI'&&e.cyc){e.s=Math.round(20/e.cyc);e.rx='DELOAD: stop the clock at 20 min. '+e.rx;return;}
-    if(d==='TUE')return; // deload keeps the delt and arm work as written
-    if(e.t==='Mobility'||e.t==='Recovery'||e.t==='Activation'||e.tt)return;
-    if(e.tm&&e.t!=='Hypertrophy'&&e.t!=='Core'){return;}
-    if(e.s>2&&!e.tm)e.s=2;
+    if(e.t==='Mobility'||e.t==='Recovery'||e.t==='Activation')return;
+    if(e.g&&e.t!=='Core'){e.s=1;e.rx='DELOAD: 1 round, lighter. '+e.rx;if(e.inc)e.dloaded=1;return;}
+    if(e.tm)return;
+    if(e.s>2)e.s=2;
     if(e.inc||e.t==='Strength'||e.bb){e.rx='DELOAD: 2 sets at about 90% of your working load, stop at RPE 6.';e.dloaded=1;}
-    else if(!e.tm){e.rx='Deload: 2 sets, easy. '+e.rx;}
+    else e.rx='Deload: 2 sets, easy. '+e.rx;
   });
-  s.exercises=ex;s.time=Math.max(20,Math.round(s.time*0.7));
+  s.exercises=ex;s.time=Math.max(20,Math.round(s.time*0.65));
   return s;
 }
+var SES_CACHE={};
 function sesFor(w,d){
-  var b=Math.ceil(w/4),k='B'+b;
+  if(d==='SUN')return {name:'Sunday',focus:'Full Rest',time:0,blk:Math.ceil(w/4),rest:true,exercises:[]};
   if(w===16&&RT[d])return RT[d];
-  if((w===14||w===15)&&d==='FRI')k='B3';
-  var base=PLAN[k]?PLAN[k][d]:null;
-  if(!base)return null;
-  if(isDL(w)&&!base.rest&&d!=='WED')return deloadify(base,d);
-  return base;
+  var key=w+d;if(SES_CACHE[key])return SES_CACHE[key];
+  var b=Math.ceil(w/4),wi=wiOf(w),f=LIST[d];
+  if(!f)return null;
+  var base=Object.assign({blk:b,exercises:f(b,wi===4?3:wi)},META[d]);
+  var out=(wi===4&&d!=='THU')?deloadify(base,d):base;
+  SES_CACHE[key]=out;return out;
 }
 function gSes(w,d){return sesFor(w,d);}
 
+
 /* ---------- state ---------- */
-var S={profile:{name:'Ario',startWeight:212.4,goalWeight:195,startWaist:38,startDate:'',currentWeek:1},ver:5,rms:{},rmH:{},done:{},sets:{},exNameLog:{},body:[],lastBackup:0};
+var S={profile:{name:'Ario',startWeight:212.4,goalWeight:195,startWaist:38,startDate:'',currentWeek:1},ver:6,rms:{},rmH:{},done:{},sets:{},exNameLog:{},body:[],lastBackup:0};
 var curMo=null,cEx=0,cSet=0,cRPE=8,eFld=null,aDay=DAYS[new Date().getDay()]||'MON';
 var rIv=null,rEnd=0,rTot=0,calD=new Date(),adv={ex:-1,set:0},audioCtx=null,progLift=0;
 
 function mig(){
   var P=S.profile=S.profile||{};
-  if(!S.ver||S.ver<5){
-    S.ver=5;
+  if(!S.ver||S.ver<6){
+    S.ver=6;
     if(String(P.startWeight)==='215')P.startWeight=212.4;
     P.startDate=lds(monOf(new Date()));
   }
@@ -676,7 +664,7 @@ function e1(w,r){return r<=1?w:w*(1+r/30);}
 function logsFor(name){
   var out=[],L=S.exNameLog||{};
   for(var k in L){
-    if(L[k]===name&&S.sets[k]){
+    if(canon(L[k])===canon(name)&&S.sets[k]){
       var p=k.split('-');
       out.push(Object.assign({date:p[0]+'-'+p[1]+'-'+p[2],k:k,ei:+p[3],si:+p[4]},S.sets[k]));
     }
@@ -692,21 +680,21 @@ function lastSess(name){
 }
 function sug(e){
   if(!e.inc)return null;
-  var w=S.profile.currentWeek,b=Math.ceil(w/4),rt=BRPE[b];
+  var w=S.profile.currentWeek,rt=e.rt||8;
   var ls=lastSess(e.n);
   if(!ls){
-    return {w:e.w0||null,txt:'No history yet. Pick a load that fits '+(isDL(w)?'RPE 6':'RPE '+rt)+' and log it. The app carries it forward.'};
+    return {w:e.w0||null,txt:'No history yet. Pick a load that fits '+(e.dloaded?'RPE 6':(rt>=10?'0-1 reps in reserve':'RPE '+rt))+' and log it. The app carries it forward.'};
   }
   var sets=ls.sets.filter(function(x){return x.w>0;});
   if(!sets.length)return null;
   var top=sets.reduce(function(a,x){return x.w>a.w?x:a;},sets[0]);
   var last='last '+top.w+' × '+top.r+(top.rpe?' @ RPE '+top.rpe:'');
-  if(isDL(w)&&e.dloaded)return {w:rnd(top.w*0.9,e.inc),txt:'Deload: about 90% of '+top.w+' ('+last+')'};
+  if(e.dloaded)return {w:rnd(top.w*0.9,e.inc),txt:'Deload: about 90% of '+top.w+' ('+last+')'};
   var ok=false;
-  if(e.top)ok=top.r>=(e.lo||1)&&top.rpe&&top.rpe<=rt-1;
+  if(e.top)ok=top.r>=(e.lo||1)&&top.rpe&&top.rpe<=rt;
   else if(e.hi)ok=sets.every(function(x){return x.r>=e.hi&&x.rpe&&x.rpe<=rt;});
   if(ok)return {w:top.w+e.inc,txt:last+', hit the target: add '+e.inc};
-  return {w:top.w,txt:last+', repeat this load until every set hits '+(e.top?(e.lo||'')+' reps with room to spare':(e.hi||'the top')+' reps at or under RPE '+rt)};
+  return {w:top.w,txt:last+', repeat this load until every set hits '+(e.top?(e.lo||'')+' reps at or under RPE '+rt:(e.hi||'the top')+' reps'+(rt>=10?' with 0-1 in reserve':' at or under RPE '+rt))};
 }
 function rampTxt(e,w){
   if(!e.ramp||!w)return '';
@@ -813,7 +801,7 @@ function lastSameLog(name){
 function oSM(i,s){
   var ses=curSes(),e=ses.exercises[i];
   var td=lds(),k=td+'-'+i+'-'+s,pv=S.sets[k],sg=sug(e);
-  cEx=i;cSet=s;cRPE=pv?pv.rpe:(isDL(S.profile.currentWeek)?6:BRPE[Math.ceil(S.profile.currentWeek/4)]);
+  cEx=i;cSet=s;cRPE=pv?pv.rpe:(e.dloaded?6:Math.min(e.rt||8,9));
   document.getElementById('mEN').textContent=e.n;
   document.getElementById('mSL').textContent='Set '+(s+1)+' of '+e.s+(e.src?' · '+e.src:'');
   var tg=[];
@@ -886,18 +874,15 @@ function saveSet(){
   unlockAudio();
   flow(ses,cEx,cSet);
 }
-// After a set: supersets jump to the partner lift, everything else starts the rest timer (max 2 min).
+// After a set: giant sets and pairs jump to the next lift in the group, the rest timer starts after the last one (max 2 min).
+function grp(ex,i){var g=ex[i].g;if(!g)return null;var a=i,b=i;while(a>0&&ex[a-1].g===g)a--;while(b<ex.length-1&&ex[b+1].g===g)b++;return {a:a,b:b};}
 function flow(ses,i,s){
   var ex=ses.exercises,e=ex[i];
   adv={ex:-1,set:0};
-  if(e.pr==='A'){
-    var nx=ex[i+1];
-    if(nx&&nx.pr==='B'&&s<nx.s){setTimeout(function(){oSM(i+1,s);},350);return;}
-  }
-  if(e.pr==='B'){
-    var a=ex[i-1];
-    if(a&&a.pr==='A'&&s+1<a.s)adv={ex:i-1,set:s+1};
-    else if(s+1<e.s)adv={ex:i,set:s+1};
+  var G=grp(ex,i);
+  if(G){
+    if(i<G.b&&s<ex[i+1].s){setTimeout(function(){oSM(i+1,s);},350);return;}
+    if(s+1<ex[G.a].s)adv={ex:G.a,set:s+1};
   }else if(s+1<e.s)adv={ex:i,set:s+1};
   var rs=Math.min(e.rest||0,REST_CAP);
   if(rs>0)sR(rs,e.n);
@@ -944,11 +929,11 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden&&doc
 
 /* ---------- Progress ---------- */
 var KL=[
- {n:'Barbell Squat (G6)',l:'Squat'},
+ {n:'Barbell Back Squat (G6)',l:'Squat'},
  {n:'Barbell Flat Bench Press (G6)',l:'Bench'},
- {n:'Barbell Romanian Deadlift (G6)',l:'RDL'},
+ {n:'Barbell Deadlift (G6)',l:'Deadlift'},
  {n:'Barbell Incline Bench Press (G6)',l:'Incline'},
- {n:'Barbell Bent-Over Row (G6)',l:'Row'},
+ {n:'Barbell Overhead Press (G6)',l:'OHP'},
  {n:'Pull-Up or Lat Pulldown (G6)',l:'Pull-ups',reps:1}
 ];
 function sessBest(l){
@@ -1045,7 +1030,7 @@ function selLift(v){progLift=parseInt(v)||0;rP();}
 function delBody(ds){if(!confirm('Delete the entry for '+ds+'?'))return;S.body=S.body.filter(function(x){return x.date!==ds;});sv();rP();}
 // Rep-test checkpoints: best weight at the test reps now versus the first logged session
 function ckHtml(){
-  var T=[{n:'Barbell Flat Bench Press (G6)',l:'Bench, 8 reps',r:8},{n:'Barbell Squat (G6)',l:'Squat, 6 reps',r:6},{n:'Barbell Romanian Deadlift (G6)',l:'RDL, 8 reps',r:8},{n:'Pull-Up or Lat Pulldown (G6)',l:'Pull-ups, max reps',reps:1}];
+  var T=[{n:'Barbell Flat Bench Press (G6)',l:'Bench, 8 reps',r:8},{n:'Barbell Back Squat (G6)',l:'Squat, 6 reps',r:6},{n:'Barbell Deadlift (G6)',l:'Deadlift, 5 reps',r:5},{n:'Pull-Up or Lat Pulldown (G6)',l:'Pull-ups, max reps',reps:1}];
   var rows=T.map(function(t){
     var ls=logsFor(t.n).filter(function(x){return !x.dl;});
     if(!ls.length)return '<div class="tr"><span>'+t.l+'</span><b>no data yet</b></div>';
@@ -1059,8 +1044,6 @@ function ckHtml(){
     if(!now)return '<div class="tr"><span>'+t.l+'</span><b>'+(t.reps?'no bodyweight set yet':'no set at '+t.r+'+ reps yet')+'</b></div>';
     return '<div class="tr"><span>'+t.l+'</span><b>'+now+u+(base&&base!==now?' <span class="'+(now>=base?'up':'dn')+'">('+(now>=base?'+':'')+(now-base)+' vs start)</span>':'')+'</b></div>';
   });
-  var lad=logsFor('Ladder Total Time').filter(function(x){return x.w>0;}).sort(function(a,b){return a.date<b.date?-1:1;});
-  rows.push('<div class="tr"><span>Friday ladder (week 13 vs 16)</span><b>'+(lad.length?lad.map(function(x){return x.w+' min';}).join(' → '):'not run yet')+'</b></div>');
   return rows.join('');
 }
 
@@ -1247,7 +1230,7 @@ var ALT_FINISHERS=[
     '4) Squat Curls ×5, hold squat position — sub: single Bowflex DB if KB handle unstable in bottom position',
     '5) Horn Press Knee Drives ×10 — sub: single DB front-racked at shoulder if racked KB position feels off'
   ],
-  note:'Complete continuously within each round. This replaces the Saturday finisher rows only. The strength and power work stays as programmed.'
+  note:'Complete continuously within each round. This replaces the Saturday athletic complex only. The lifts above it stay as programmed.'
 },
 {
   name:'Melt Benchmark WOD Day 2',
@@ -1263,7 +1246,7 @@ var ALT_FINISHERS=[
     '30 Straight Leg Sit-Up — watch lumbar under fatigue, stop if form breaks',
     '30 DB Alternating Snatch (Bowflex DB)'
   ],
-  note:'Heavy on hinging (60 deadlift and snatch reps per round set) and sit-ups (90 total). Use once per block at most. Skip it if Thursday or Friday left your low back or grip flat.'
+  note:'Heavy on hinging (60 deadlift and snatch reps per round set) and sit-ups (90 total). Use once per block at most. Skip it if Wednesday or Friday left your low back or grip flat.'
 }
 ];
 function openAltFinisher(){
